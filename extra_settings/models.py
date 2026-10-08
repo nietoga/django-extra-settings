@@ -266,7 +266,7 @@ class Setting(models.Model):
     @sensitive_variables()
     def rotate_secret(self):
         old_token = self.value_secret
-        value, _ = decrypt_secret(self._secret_name, old_token)
+        value = decrypt_secret(self._secret_name, old_token)[0]
         new_token = encrypt_secret(self._secret_name, value)
         updated = Setting.objects.filter(pk=self.pk, value_secret=old_token).update(
             value_secret=new_token
@@ -319,7 +319,7 @@ class Setting(models.Model):
     @sensitive_variables()
     def _rebind_secret(self):
         if self.value_secret and self._secret_name != self.name:
-            value, _ = decrypt_secret(self._secret_name, self.value_secret)
+            value = decrypt_secret(self._secret_name, self.value_secret)[0]
             self.value_secret = encrypt_secret(self.name, value)
         self._secret_name = self.name
 

@@ -74,7 +74,11 @@ class SettingAdmin(admin.ModelAdmin):
     )
     search_fields = ("name",)
     list_display = (
-        ("name", "value_type") + value_fields_names + ("secret_status", "description")
+        "name",
+        "value_type",
+        *value_fields_names,
+        "secret_status",
+        "description",
     )
 
     # begin dynamic list filters
@@ -105,12 +109,11 @@ class SettingAdmin(admin.ModelAdmin):
             else:
                 value_fields = (obj.value_field_name,)
             fields = (
-                ("name", "value_type")
-                + value_fields
-                + (
-                    "validator",
-                    "description",
-                )
+                "name",
+                "value_type",
+                *value_fields,
+                "validator",
+                "description",
             )
         else:
             fields = (

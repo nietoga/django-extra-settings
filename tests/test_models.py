@@ -256,3 +256,26 @@ class ExtraSettingsModelsTestCase(TestCase):
         setting_obj.save()
         setting_obj = Setting.objects.get(name="TEST_SETTING_JSON")
         self.assertEqual(setting_obj.value, {"level": "L2", "role": "Admin"})
+
+
+class SettingCategoryTestCase(TestCase):
+    def test_set_defaults_applies_category_on_creation_only(self):
+        item = {
+            "name": "CAT_B",
+            "type": "string",
+            "value": "x",
+            "category": "AI/Retries",
+        }
+        Setting.set_defaults([item])
+        Setting.objects.filter(name="CAT_B").update(category="Other")
+        Setting.set_defaults([item])
+        self.assertEqual(Setting.objects.get(name="CAT_B").category, "Other")
+
+    def test_ordering_by_category_then_name(self):
+        Setting.objects.create(name="B_ONE", value_type="string", category="Z")
+        Setting.objects.create(name="A_ONE", value_type="string", category="Z")
+        Setting.objects.create(name="C_ONE", value_type="string", category="A")
+        names = list(
+            Setting.objects.filter(name__endswith="_ONE").values_list("name", flat=True)
+        )
+        self.assertEqual(names, ["C_ONE", "A_ONE", "B_ONE"])

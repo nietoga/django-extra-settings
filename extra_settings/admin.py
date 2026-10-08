@@ -72,12 +72,12 @@ class SettingAdmin(admin.ModelAdmin):
         "value_time",
         "value_url",
     )
-    search_fields = ("name",)
-    list_display = ("name", "value_type") + value_fields_names + ("description",)
+    search_fields = ("name", "category")
+    list_display = ("name", "category", "value_type") + value_fields_names + ("description",)
 
     # begin dynamic list filters
 
-    list_filter_items = []
+    list_filter_items = ["category"]
 
     if settings.EXTRA_SETTINGS_SHOW_NAME_PREFIX_LIST_FILTER:
         list_filter_items.append(SettingNamePrefixFilter)
@@ -91,7 +91,7 @@ class SettingAdmin(admin.ModelAdmin):
     # end dynamic list filters
 
     list_editable = value_fields_names
-    sortable_by = ("name",)
+    sortable_by = ("category", "name")
 
     def get_changelist_form(self, request, **kwargs):
         return SettingForm
@@ -99,6 +99,7 @@ class SettingAdmin(admin.ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         if obj:
             fields = (
+                "category",
                 "name",
                 "value_type",
                 obj.value_field_name,
@@ -107,6 +108,7 @@ class SettingAdmin(admin.ModelAdmin):
             )
         else:
             fields = (
+                "category",
                 "name",
                 "value_type",
             )

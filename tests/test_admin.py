@@ -46,7 +46,7 @@ class ExtraSettingsAdminTestCase(TestCase):
                     None,
                     {
                         "classes": ("wide",),
-                        "fields": ("name", "value_type"),
+                        "fields": ("category", "name", "value_type"),
                     },
                 ),
             ),
@@ -59,6 +59,7 @@ class ExtraSettingsAdminTestCase(TestCase):
                     {
                         "classes": ("wide",),
                         "fields": (
+                            "category",
                             "name",
                             "value_type",
                             "value_string",

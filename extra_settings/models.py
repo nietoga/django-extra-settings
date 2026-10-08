@@ -89,11 +89,13 @@ class Setting(models.Model):
                 ) from error
             validator = item.get("validator", None)
             description = item.get("description", "")
+            category = item.get("category", "")
             setting_obj, setting_created = cls.objects.get_or_create(
                 name=name,
                 defaults={
                     "value_type": value_type,
                     "description": description,
+                    "category": category,
                     "validator": validator,
                 },
             )
@@ -135,6 +137,13 @@ class Setting(models.Model):
         verbose_name=_(
             "Type",
         ),
+    )
+    category = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+        verbose_name=_("Category"),
+        help_text=_("Optional, e.g. AI/Grading."),
     )
     description = models.TextField(
         blank=True,
@@ -268,7 +277,7 @@ class Setting(models.Model):
         self.validate()
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["category", "name"]
         verbose_name = _("Setting")
         verbose_name_plural = _("Settings")
 

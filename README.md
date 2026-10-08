@@ -98,6 +98,12 @@ EXTRA_SETTINGS_VERBOSE_NAME = "Settings"
 > When using **Celery**'s `autodiscover_tasks` with `force=True`, it triggers an aggressive task discovery that accesses Django settings before they're fully initialized. This premature access prevents `django-extra-settings` from properly setting up its default configuration values. More info [here](https://github.com/fabiocaccamo/django-extra-settings/issues/177).
 
 ### Admin
+### Categories
+
+Settings can be grouped with the optional `category` key in `EXTRA_SETTINGS_DEFAULTS`
+(applied only when the setting is created) or the `category` admin field. The admin list
+can be filtered by category.
+
 You can display the settings model admin in another installed app group by using the `EXTRA_SETTINGS_ADMIN_APP` setting.
 
 You can also have a more advanced control, by registering the settings admin with multiple installed apps and filtering each app settings using the `queryset_processor` argument.

@@ -73,7 +73,13 @@ class SettingAdmin(admin.ModelAdmin):
         "value_url",
     )
     search_fields = ("name",)
-    list_display = ("name", "value_type") + value_fields_names + ("description",)
+    list_display = (
+        "name",
+        "value_type",
+        *value_fields_names,
+        "secret_status",
+        "description",
+    )
 
     # begin dynamic list filters
 
@@ -98,10 +104,14 @@ class SettingAdmin(admin.ModelAdmin):
 
     def get_fieldsets(self, request, obj=None):
         if obj:
+            if obj.is_secret:
+                value_fields = ("secret_value", "clear_secret_value")
+            else:
+                value_fields = (obj.value_field_name,)
             fields = (
                 "name",
                 "value_type",
-                obj.value_field_name,
+                *value_fields,
                 "validator",
                 "description",
             )
@@ -119,6 +129,12 @@ class SettingAdmin(admin.ModelAdmin):
                 },
             ),
         )
+
+    @admin.display(description=_("Secret"))
+    def secret_status(self, obj):
+        if not obj.is_secret:
+            return ""
+        return _("set") if obj.is_secret_set else _("not set")
 
     def get_readonly_fields(self, request, obj=None):
         return ("value_type",) if obj else ()

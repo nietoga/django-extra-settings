@@ -5,10 +5,12 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
 
 from extra_settings import fields
 from extra_settings.cache import get_cached_setting, set_cached_setting
 from extra_settings.choices import SettingType
+from extra_settings.encryption import decrypt_secret, encrypt_secret
 from extra_settings.utils import enforce_uppercase_setting, import_function
 
 
@@ -19,7 +21,7 @@ class Setting(models.Model):
 
     @staticmethod
     def _cache_all_settings():
-        settings_qs = Setting.objects.all()
+        settings_qs = Setting.objects.exclude(value_type=SettingType.SECRET)
         settings_list = list(settings_qs)
         for setting_obj in settings_list:
             setting_name = setting_obj.name
@@ -34,11 +36,13 @@ class Setting(models.Model):
     def _get_from_database(name):
         try:
             setting_obj = Setting.objects.get(name=name)
-            value = setting_obj.value
-            set_cached_setting(name, value)
-            return value
         except Setting.DoesNotExist:
-            return None
+            return None, False
+        if setting_obj.is_secret:
+            return (setting_obj.value or None), True
+        value = setting_obj.value
+        set_cached_setting(name, value)
+        return value, False
 
     @staticmethod
     def _get_from_settings(name):
@@ -50,12 +54,13 @@ class Setting(models.Model):
     def get(cls, name, default=None):
         val = cls._get_from_cache(name)
         if val is None:
-            val = cls._get_from_database(name)
+            val, is_secret = cls._get_from_database(name)
             if val is None:
                 val = cls._get_from_settings(name)
                 if val is not None:
                     # cache conf-settings values so subsequent calls are free
-                    set_cached_setting(name, val)
+                    if not is_secret:
+                        set_cached_setting(name, val)
                 else:
                     # default values must NOT be cached: the setting may be
                     # created in the DB later and the cached default would
@@ -87,6 +92,11 @@ class Setting(models.Model):
                     "Setting 'defaults' item must contain "
                     "'name', 'type' and 'value' keys."
                 ) from error
+            if value_type == SettingType.SECRET and value:
+                raise ValueError(
+                    f"Setting 'defaults' item {name!r} is a secret and cannot "
+                    "have a non-empty value, set it from the admin instead."
+                )
             validator = item.get("validator", None)
             description = item.get("description", "")
             setting_obj, setting_created = cls.objects.get_or_create(
@@ -116,6 +126,7 @@ class Setting(models.Model):
     TYPE_IMAGE = SettingType.IMAGE
     TYPE_INT = SettingType.INT
     TYPE_JSON = SettingType.JSON
+    TYPE_SECRET = SettingType.SECRET
     TYPE_STRING = SettingType.STRING
     TYPE_TEXT = SettingType.TEXT
     TYPE_TIME = SettingType.TIME
@@ -197,6 +208,11 @@ class Setting(models.Model):
         default=dict,
         verbose_name=_("Value"),
     )
+    value_secret = models.TextField(
+        blank=True,
+        verbose_name=_("Value"),
+        help_text=_("Encrypted value, never access this field directly."),
+    )
     value_string = models.CharField(
         blank=True,
         max_length=255,
@@ -231,16 +247,57 @@ class Setting(models.Model):
         return f"value_{self.value_type}"
 
     @property
+    def is_secret(self):
+        return self.value_type == SettingType.SECRET
+
+    @property
+    def is_secret_set(self):
+        return bool(self.value_secret)
+
+    @sensitive_variables()
+    def _get_secret_value(self):
+        if not self.value_secret:
+            return ""
+        value, needs_rotation = decrypt_secret(self._secret_name, self.value_secret)
+        if needs_rotation and self.pk and not self._state.adding:
+            self.rotate_secret()
+        return value
+
+    @sensitive_variables()
+    def rotate_secret(self):
+        old_token = self.value_secret
+        value, _ = decrypt_secret(self._secret_name, old_token)
+        new_token = encrypt_secret(self._secret_name, value)
+        updated = Setting.objects.filter(pk=self.pk, value_secret=old_token).update(
+            value_secret=new_token
+        )
+        if updated:
+            self.value_secret = new_token
+
+    @sensitive_variables()
+    def _set_secret_value(self, new_value):
+        self._secret_name = self.name
+        self.value_secret = (
+            encrypt_secret(self.name, str(new_value)) if new_value else ""
+        )
+
+    @property
     def value(self):
+        if self.is_secret:
+            return self._get_secret_value()
         return getattr(self, self.value_field_name, None)
 
     @value.setter
     def value(self, new_value):
-        setattr(self, self.value_field_name, new_value)
+        if self.is_secret:
+            self._set_secret_value(new_value)
+        else:
+            setattr(self, self.value_field_name, new_value)
 
     def __init__(self, *args, **kwargs):
         value = kwargs.pop("value", None)
         super().__init__(*args, **kwargs)
+        self._secret_name = self.name
         if value is not None:
             self.value = value
         self.name_initial = self.name
@@ -253,15 +310,26 @@ class Setting(models.Model):
             raise ValueError(f"Invalid validator function path: {self.validator!r}")
         is_valid = validator_func(self.value)
         if not is_valid:
+            value_repr = "the value" if self.is_secret else f"{self.value!r}"
             raise ValidationError(
                 f"Invalid value for setting {self.name!r}, "
-                f"{self.value!r} is not validated by {self.validator!r} validator."
+                f"{value_repr} is not validated by {self.validator!r} validator."
             )
+
+    @sensitive_variables()
+    def _rebind_secret(self):
+        if self.value_secret and self._secret_name != self.name:
+            value, _ = decrypt_secret(self._secret_name, self.value_secret)
+            self.value_secret = encrypt_secret(self.name, value)
+        self._secret_name = self.name
 
     def save(self, *args, **kwargs):
         if settings.EXTRA_SETTINGS_ENFORCE_UPPERCASE_SETTINGS:
             self.name = enforce_uppercase_setting(self.name)
+        if self.is_secret:
+            self._rebind_secret()
         super().save(*args, **kwargs)
+        self.name_initial = self.name
 
     def clean(self):
         super().clean()

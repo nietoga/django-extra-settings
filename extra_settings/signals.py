@@ -22,6 +22,8 @@ def post_save_setting(sender, instance, **kwargs):
         return
     if instance.name != instance.name_initial:
         del_cached_setting(instance.name_initial)
+    if instance.is_secret:
+        return
     set_cached_setting(instance.name, instance.value)
 
 

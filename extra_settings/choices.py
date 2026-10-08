@@ -13,6 +13,7 @@ class SettingType(models.TextChoices):
     IMAGE = "image", "image"
     INT = "int", "int"
     JSON = "json", "json"
+    SECRET = "secret", "secret"
     STRING = "string", "string"
     TEXT = "text", "text"
     TIME = "time", "time"

@@ -20,6 +20,7 @@ EXPECTED_TYPES = {
     "IMAGE": "image",
     "INT": "int",
     "JSON": "json",
+    "SECRET": "secret",
     "STRING": "string",
     "TEXT": "text",
     "TIME": "time",
